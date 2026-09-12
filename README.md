@@ -35,6 +35,22 @@ reasoning behind the major choices.
 - Database: PostgreSQL
 - Storage: S3-compatible object storage or private local development storage
 
+## Project structure
+
+```text
+backend/app/
+    config/       environment settings
+    database/     SQLAlchemy engine and sessions
+    models/       PostgreSQL entities
+    routes/       auth, content, and admin APIs
+    services/     authentication and storage services
+    middleware/   security headers
+    schemas/      validated API responses
+frontend/src/
+    App.jsx       routed portal experience
+    App.css       responsive portal styles
+```
+
 ## Local setup
 
 Create a PostgreSQL database named `secure_content_portal`, then configure the
@@ -75,6 +91,26 @@ Use [.env.example](.env.example) as the template. Important values are:
 - `MAX_VIDEO_SIZE_MB`, `MAX_PDF_SIZE_MB`, `MAX_HTML_SIZE_MB`: upload limits
 
 Never commit `backend/.env`, credentials, or object-storage keys.
+
+## Google OAuth setup
+
+Create a Google OAuth web client and add the local callback
+`http://localhost:8000/api/auth/callback` plus the production backend callback
+to its authorized redirect URIs. Set the client ID, secret, and callback in
+`backend/.env`. Add trusted administrator addresses to `ADMIN_EMAILS`; all
+other first-time identities are created as viewers.
+
+## PostgreSQL setup
+
+Create a PostgreSQL database and set `DATABASE_URL`. Apply migrations with
+`alembic upgrade head`. The schema stores user, session, and content metadata;
+binary content is never stored in PostgreSQL.
+
+## Storage setup
+
+Local development uses a private `.private_storage` directory ignored by Git.
+For deployment, set `STORAGE_BACKEND=s3` and provide a private S3-compatible
+bucket plus its endpoint and credentials. Do not enable public object access.
 
 ## Authentication and authorization
 
@@ -126,13 +162,19 @@ types, and the admin upload/edit/delivery/delete lifecycle.
 Deploy the frontend to Vercel or Netlify, the FastAPI service to Render or an
 equivalent HTTPS host, PostgreSQL to Neon/Supabase, and storage to a private
 Supabase Storage or S3-compatible bucket. Set `STORAGE_BACKEND=s3`, configure
-the production OAuth callback URI in Google Cloud, set `COOKIE_SECURE=true`,
-and restrict `FRONTEND_URL` to the deployed frontend origin. Do not use
+the production OAuth callback URI in Google Cloud, set `COOKIE_SECURE=true` and
+`COOKIE_SAMESITE=none` when frontend and backend are on different sites, and
+restrict `FRONTEND_URL` to the deployed frontend origin. Do not use
 wildcard CORS with credentials.
 
 The repository contains deployment-ready configuration, but a live deployment
 requires the operator's provider accounts, Google OAuth credentials, database,
 and storage secrets; those cannot be generated locally or committed safely.
+
+## Live demo
+
+No live demo is configured in this repository. Deployment requires external
+provider accounts and secrets that are intentionally not committed.
 
 ## Security limitations
 
@@ -141,3 +183,9 @@ and non-public URLs are the real security boundaries. PDF.js controls the viewer
 experience but cannot prevent extraction. Once an authorized browser receives
 content, a determined user can capture or reproduce it. Stronger future options
 include watermarking, DRM, HLS, expiring delivery tokens, and forensic auditing.
+
+## Future improvements
+
+Potential next steps are HLS/DRM for higher-value video, forensic watermarking,
+expiring session-bound delivery tokens, audit logs, search/filtering, and
+automated browser tests against a deployed environment.

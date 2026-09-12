@@ -19,9 +19,12 @@ app = FastAPI(
 logger = logging.getLogger(__name__)
 
 app.add_middleware(SecurityHeadersMiddleware)
+allowed_origins = [settings.FRONTEND_URL]
+if settings.FRONTEND_URL.startswith("http://localhost:"):
+    allowed_origins.append(settings.FRONTEND_URL.replace("http://localhost:", "http://127.0.0.1:"))
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Range"],

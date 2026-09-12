@@ -34,5 +34,8 @@ def require_admin(user: User = Depends(get_current_user)) -> User:
 
 def validate_origin(request: Request) -> None:
     origin = request.headers.get("origin")
-    if origin and origin.rstrip("/") != settings.FRONTEND_URL.rstrip("/"):
+    allowed_origins = {settings.FRONTEND_URL.rstrip("/")}
+    if settings.FRONTEND_URL.startswith("http://localhost:"):
+        allowed_origins.add(settings.FRONTEND_URL.replace("http://localhost:", "http://127.0.0.1:").rstrip("/"))
+    if origin and origin.rstrip("/") not in allowed_origins:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid request origin")

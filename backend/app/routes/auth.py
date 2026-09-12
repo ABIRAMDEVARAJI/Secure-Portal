@@ -32,7 +32,7 @@ def session_cookie(response: RedirectResponse, token: str) -> None:
         max_age=settings.SESSION_MAX_AGE_SECONDS,
         httponly=True,
         secure=settings.COOKIE_SECURE,
-        samesite="lax",
+        samesite=settings.COOKIE_SAMESITE,
         path="/",
     )
 

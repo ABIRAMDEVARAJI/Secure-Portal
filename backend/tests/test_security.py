@@ -117,3 +117,57 @@ def test_viewer_cannot_edit_or_delete_content():
         assert client.delete("/api/admin/content/1", cookies={"scp_session": token}).status_code == 403
     finally:
         cleanup(user_id)
+
+
+def test_protected_media_headers_and_video_range():
+    user_id, token = session_for(UserRole.ADMIN)
+    try:
+        video = client.post(
+            "/api/admin/content",
+            cookies={"scp_session": token},
+            files={"file": ("lesson.mp4", b"\x00\x00\x00\x18ftypisom1234567890", "video/mp4")},
+            data={"title": "Lesson"},
+        )
+        pdf = client.post(
+            "/api/admin/content",
+            cookies={"scp_session": token},
+            files={"file": ("guide.pdf", b"%PDF-1.7\ncontent", "application/pdf")},
+            data={"title": "Guide"},
+        )
+        html = client.post(
+            "/api/admin/content",
+            cookies={"scp_session": token},
+            files={"file": ("guide.html", b"<h1>Guide</h1>", "text/html")},
+            data={"title": "HTML guide"},
+        )
+        assert video.status_code == pdf.status_code == html.status_code == 201
+        video_id = video.json()["id"]
+        pdf_id = pdf.json()["id"]
+        html_id = html.json()["id"]
+
+        streamed = client.get(f"/api/content/{video_id}/stream", cookies={"scp_session": token}, headers={"Range": "bytes=0-7"})
+        assert streamed.status_code == 206
+        assert streamed.headers["accept-ranges"] == "bytes"
+        assert streamed.headers["content-range"].startswith("bytes 0-7/")
+        assert streamed.content == b"\x00\x00\x00\x18ftyp"
+
+        rendered_pdf = client.get(f"/api/content/{pdf_id}/pdf", cookies={"scp_session": token})
+        assert rendered_pdf.status_code == 200
+        assert rendered_pdf.headers["content-type"].startswith("application/pdf")
+
+        rendered_html = client.get(f"/api/content/{html_id}/html", cookies={"scp_session": token})
+        assert rendered_html.status_code == 200
+        assert "frame-ancestors http://localhost:5173" in rendered_html.headers["content-security-policy"]
+    finally:
+        cleanup(user_id)
+
+
+def test_logout_invalidates_session():
+    user_id, token = session_for(UserRole.VIEWER)
+    try:
+        cookies = {"scp_session": token}
+        assert client.get("/api/auth/me", cookies=cookies).status_code == 200
+        assert client.post("/api/auth/logout", cookies=cookies, headers={"Origin": "http://localhost:5173"}).status_code == 204
+        assert client.get("/api/auth/me", cookies=cookies).status_code == 401
+    finally:
+        cleanup(user_id)

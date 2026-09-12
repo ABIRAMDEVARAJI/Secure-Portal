@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     SESSION_COOKIE_NAME: str = "scp_session"
     SESSION_MAX_AGE_SECONDS: int = 28800
     COOKIE_SECURE: bool = False
+    COOKIE_SAMESITE: str = "lax"
     ADMIN_EMAILS: str = ""
     STORAGE_BACKEND: str = "local"
     STORAGE_ENDPOINT: str = ""

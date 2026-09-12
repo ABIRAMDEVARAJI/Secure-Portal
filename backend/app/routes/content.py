@@ -6,6 +6,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config.settings import settings
 from app.database.database import get_db
 from app.dependencies import get_current_user
 from app.models.content import Content, ContentType
@@ -119,7 +120,7 @@ def render_html(content_id: int, db: Session = Depends(get_db), _: User = Depend
         raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Content is not HTML")
     file_obj = storage.open(content.storage_key)
     return StreamingResponse(file_iterator(file_obj), media_type="text/html", headers={
-        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:;",
+        "Content-Security-Policy": f"default-src 'none'; style-src 'unsafe-inline'; img-src data:; frame-ancestors {settings.FRONTEND_URL};",
         "Content-Disposition": "inline",
         "Cache-Control": "private, no-store",
     })
