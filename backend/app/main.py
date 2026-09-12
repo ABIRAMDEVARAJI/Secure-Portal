@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import logging
 from sqlalchemy import text
+from starlette.middleware.sessions import SessionMiddleware
 
 from app.config.settings import settings
 from app.database.database import engine
@@ -19,6 +20,13 @@ app = FastAPI(
 )
 logger = logging.getLogger(__name__)
 
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.SESSION_SECRET,
+    max_age=settings.SESSION_MAX_AGE_SECONDS,
+    same_site=settings.COOKIE_SAMESITE,
+    https_only=settings.COOKIE_SECURE,
+)
 app.add_middleware(SecurityHeadersMiddleware)
 allowed_origins = [settings.FRONTEND_URL]
 if settings.FRONTEND_URL.startswith("http://localhost:"):

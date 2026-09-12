@@ -5,10 +5,13 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete
 
 from app.database.database import SessionLocal
+from app.config.settings import settings
 from app.main import app
-from app.models.content import Content
+from app.models.content import Content, ContentType
 from app.models.user import User, UserRole, UserSession
+from app.services.auth_service import upsert_google_user
 from app.services.storage_service import storage
+from app.utils import file_validation
 from app.utils.security import create_session_token, hash_session_token
 
 
@@ -41,6 +44,28 @@ def cleanup(user_id: int) -> None:
     db.close()
 
 
+def test_google_role_defaults_and_allowlist_promotion(monkeypatch):
+    db = SessionLocal()
+    google_id = f"test-{uuid4()}"
+    email = f"{uuid4()}@example.com"
+    try:
+        monkeypatch.setattr(settings, "ADMIN_EMAILS", "")
+        user = upsert_google_user(db, {"sub": google_id, "email": email, "name": "Test User"})
+        assert user.role == UserRole.VIEWER
+
+        monkeypatch.setattr(settings, "ADMIN_EMAILS", email)
+        user = upsert_google_user(db, {"sub": google_id, "email": email, "name": "Test User"})
+        assert user.role == UserRole.ADMIN
+
+        monkeypatch.setattr(settings, "ADMIN_EMAILS", "")
+        user = upsert_google_user(db, {"sub": google_id, "email": email, "name": "Test User"})
+        assert user.role == UserRole.VIEWER
+        user_id = user.id
+    finally:
+        db.close()
+        cleanup(user_id)
+
+
 def test_unauthenticated_user_cannot_access_content():
     response = client.get("/api/content")
     assert response.status_code == 401
@@ -58,6 +83,19 @@ def test_viewer_cannot_access_admin_upload():
         assert response.status_code == 403
     finally:
         cleanup(user_id)
+
+
+def test_unauthenticated_users_cannot_call_admin_apis():
+    assert client.post(
+        "/api/admin/content",
+        files={"file": ("reference.html", b"<h1>Reference</h1>", "text/html")},
+        data={"title": "Reference"},
+    ).status_code == 401
+    assert client.patch(
+        "/api/admin/content/1",
+        json={"title": "Attempt", "description": "", "category": ""},
+    ).status_code == 401
+    assert client.delete("/api/admin/content/1").status_code == 401
 
 
 def test_invalid_file_type_is_rejected_for_admin():
@@ -119,6 +157,29 @@ def test_viewer_cannot_edit_or_delete_content():
         cleanup(user_id)
 
 
+def test_viewer_can_browse_and_view_private_content():
+    admin_id, admin_token = session_for(UserRole.ADMIN)
+    viewer_id, viewer_token = session_for(UserRole.VIEWER)
+    try:
+        created = client.post(
+            "/api/admin/content",
+            cookies={"scp_session": admin_token},
+            files={"file": ("reference.html", b"<h1>Reference</h1>", "text/html")},
+            data={"title": "Reference", "description": "Training", "category": "Security"},
+        )
+        assert created.status_code == 201
+        content_id = created.json()["id"]
+
+        assert client.get("/api/content", cookies={"scp_session": viewer_token}).status_code == 200
+        assert client.get(f"/api/content/{content_id}", cookies={"scp_session": viewer_token}).status_code == 200
+        delivered = client.get(f"/api/content/{content_id}/html", cookies={"scp_session": viewer_token})
+        assert delivered.status_code == 200
+        assert delivered.content == b"<h1>Reference</h1>"
+    finally:
+        cleanup(admin_id)
+        cleanup(viewer_id)
+
+
 def test_protected_media_headers_and_video_range():
     user_id, token = session_for(UserRole.ADMIN)
     try:
@@ -144,6 +205,10 @@ def test_protected_media_headers_and_video_range():
         video_id = video.json()["id"]
         pdf_id = pdf.json()["id"]
         html_id = html.json()["id"]
+
+        assert client.get(f"/api/content/{video_id}/stream").status_code == 401
+        assert client.get(f"/api/content/{pdf_id}/pdf").status_code == 401
+        assert client.get(f"/api/content/{html_id}/html").status_code == 401
 
         streamed = client.get(f"/api/content/{video_id}/stream", cookies={"scp_session": token}, headers={"Range": "bytes=0-7"})
         assert streamed.status_code == 206
@@ -190,5 +255,20 @@ def test_blank_title_and_empty_file_are_rejected():
         )
         assert blank_title.status_code == 422
         assert empty_file.status_code == 400
+    finally:
+        cleanup(user_id)
+
+
+def test_oversized_file_is_rejected(monkeypatch):
+    user_id, token = session_for(UserRole.ADMIN)
+    try:
+        monkeypatch.setitem(file_validation.ALLOWED_FILES, ".html", (ContentType.HTML, "text/html", 0))
+        response = client.post(
+            "/api/admin/content",
+            cookies={"scp_session": token},
+            files={"file": ("guide.html", b"<h1>Guide</h1>", "text/html")},
+            data={"title": "Guide"},
+        )
+        assert response.status_code == 413
     finally:
         cleanup(user_id)

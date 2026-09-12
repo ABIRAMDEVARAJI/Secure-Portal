@@ -33,8 +33,7 @@ def upsert_google_user(db: Session, profile: dict) -> User:
         user.email = email
         user.name = str(profile.get("name") or user.name)
         user.profile_picture = profile.get("picture")
-        if email in admin_email_set():
-            user.role = UserRole.ADMIN
+        user.role = role
     db.commit()
     db.refresh(user)
     return user
