@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import logging
 from sqlalchemy import text
 
@@ -54,7 +55,7 @@ def health_check():
 
     except Exception:
         logger.exception("Database health check failed")
-        return {
+        return JSONResponse(status_code=503, content={
             "status": "unhealthy",
             "database": "disconnected",
-        }
+        })

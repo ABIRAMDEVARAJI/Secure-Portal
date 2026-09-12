@@ -1,4 +1,5 @@
 import uuid
+import logging
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from sqlalchemy.orm import Session
@@ -13,6 +14,7 @@ from app.utils.file_validation import inspect_upload
 
 
 router = APIRouter(prefix="/api/admin/content", tags=["administration"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("", response_model=ContentResponse, status_code=status.HTTP_201_CREATED)
@@ -26,6 +28,8 @@ def upload_content(
     admin: User = Depends(require_admin),
 ):
     validate_origin(request)
+    if not title.strip():
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Title cannot be blank")
     content_type, mime_type, file_size, original_filename = inspect_upload(file)
     storage_key = f"content/{uuid.uuid4()}_{uuid.uuid4().hex}{original_filename[original_filename.rfind('.'):].lower()}"
     try:
@@ -42,13 +46,18 @@ def upload_content(
         return content
     except Exception as exc:
         db.rollback()
-        storage.delete(storage_key)
+        try:
+            storage.delete(storage_key)
+        except Exception:
+            logger.exception("Failed to clean up storage object after upload failure")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Content upload failed") from exc
 
 
 @router.patch("/{content_id}", response_model=ContentResponse)
 def update_content(content_id: int, payload: ContentMetadataUpdate, request: Request, db: Session = Depends(get_db), _: User = Depends(require_admin)):
     validate_origin(request)
+    if not payload.title.strip():
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Title cannot be blank")
     content = db.get(Content, content_id)
     if content is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Content not found")

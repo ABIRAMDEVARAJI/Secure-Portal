@@ -171,3 +171,24 @@ def test_logout_invalidates_session():
         assert client.get("/api/auth/me", cookies=cookies).status_code == 401
     finally:
         cleanup(user_id)
+
+
+def test_blank_title_and_empty_file_are_rejected():
+    user_id, token = session_for(UserRole.ADMIN)
+    try:
+        blank_title = client.post(
+            "/api/admin/content",
+            cookies={"scp_session": token},
+            files={"file": ("guide.html", b"<h1>Guide</h1>", "text/html")},
+            data={"title": "   "},
+        )
+        empty_file = client.post(
+            "/api/admin/content",
+            cookies={"scp_session": token},
+            files={"file": ("guide.html", b"", "text/html")},
+            data={"title": "Guide"},
+        )
+        assert blank_title.status_code == 422
+        assert empty_file.status_code == 400
+    finally:
+        cleanup(user_id)

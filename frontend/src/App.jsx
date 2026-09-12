@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
 import { BrowserRouter, Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
-import * as pdfjsLib from 'pdfjs-dist'
 import './App.css'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString()
+const PDF_WORKER_URL = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString()
 
 async function api(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, { credentials: 'include', ...options })
@@ -31,7 +30,7 @@ function LoginPage() {
 function Shell({ user, setUser }) {
   const navigate = useNavigate()
   async function logout() { await api('/api/auth/logout', { method: 'POST' }).catch(() => {}); setUser(null); navigate('/') }
-  return <div className="app-shell"><header className="topbar"><Link className="brand" to="/dashboard"><span className="mark">SC<span>•</span>P</span><span>Secure Content Portal</span></Link><nav><Link to="/dashboard">Library</Link>{user.role === 'ADMIN' && <Link to="/admin">Admin desk</Link>}</nav><div className="account"><span className="avatar">{user.name[0]}</span><span className="account-name">{user.name}</span><button className="text-button" onClick={logout}>Sign out</button></div></header><Routes><Route path="/" element={<Navigate to="/dashboard" replace />} /><Route path="/dashboard" element={<Dashboard />} /><Route path="/content/:id" element={<ContentPage />} />{user.role === 'ADMIN' && <><Route path="/admin" element={<AdminPage />} /><Route path="/admin/upload" element={<UploadPage />} /><Route path="/admin/content/:id/edit" element={<EditPage />} /></>}</Routes></div>
+  return <div className="app-shell"><header className="topbar"><Link className="brand" to="/dashboard"><span className="mark">SC<span>•</span>P</span><span>Secure Content Portal</span></Link><nav><Link to="/dashboard">Library</Link>{user.role === 'ADMIN' && <Link to="/admin">Admin desk</Link>}</nav><div className="account"><span className="avatar">{user.name[0]}</span><span className="account-name">{user.name}</span><button className="text-button" onClick={logout}>Sign out</button></div></header><Routes><Route path="/" element={<Navigate to="/dashboard" replace />} /><Route path="/dashboard" element={<Dashboard />} /><Route path="/content/:id" element={<ContentPage />} />{user.role === 'ADMIN' && <><Route path="/admin" element={<AdminPage />} /><Route path="/admin/upload" element={<UploadPage />} /><Route path="/admin/content/:id/edit" element={<EditPage />} /></>}<Route path="*" element={<Navigate to="/dashboard" replace />} /></Routes></div>
 }
 
 function Dashboard() {
@@ -54,7 +53,7 @@ function ContentViewer({ item }) { if (item.content_type === 'VIDEO') return <vi
 
 function PdfViewer({ id }) {
   const [pages, setPages] = useState([]); const [error, setError] = useState('')
-  useEffect(() => { let active = true; fetch(`${API_URL}/api/content/${id}/pdf`, { credentials: 'include' }).then((response) => response.arrayBuffer()).then((data) => pdfjsLib.getDocument({ data }).promise).then(async (pdf) => { const rendered = []; for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) { const page = await pdf.getPage(pageNumber); const viewport = page.getViewport({ scale: 1.25 }); const canvas = document.createElement('canvas'); canvas.width = viewport.width; canvas.height = viewport.height; await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise; rendered.push(canvas.toDataURL()) } if (active) setPages(rendered) }).catch((err) => active && setError(err.message)); return () => { active = false } }, [id])
+  useEffect(() => { let active = true; fetch(`${API_URL}/api/content/${id}/pdf`, { credentials: 'include' }).then((response) => { if (!response.ok) throw new Error(`Unable to load PDF (${response.status})`); return response.arrayBuffer() }).then((data) => import('pdfjs-dist').then((pdfjsLib) => { pdfjsLib.GlobalWorkerOptions.workerSrc = PDF_WORKER_URL; return pdfjsLib.getDocument({ data }).promise })).then(async (pdf) => { const rendered = []; for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) { const page = await pdf.getPage(pageNumber); const viewport = page.getViewport({ scale: 1.25 }); const canvas = document.createElement('canvas'); canvas.width = viewport.width; canvas.height = viewport.height; await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise; rendered.push(canvas.toDataURL()) } if (active) setPages(rendered) }).catch((err) => active && setError(err.message)); return () => { active = false } }, [id])
   if (error) return <Notice message={error} />; if (!pages.length) return <div className="viewer-loading"><span className="spinner" /> Rendering document...</div>; return <div className="pdf-viewer">{pages.map((page, index) => <img key={page} src={page} alt={`Page ${index + 1}`} />)}</div>
 }
 

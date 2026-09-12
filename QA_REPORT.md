@@ -23,7 +23,7 @@ present.
 
 - `pip check`: passed
 - `alembic check`: passed
-- `pytest -q`: 7 passed
+- `pytest -q`: 8 passed
 - Python compilation: passed
 - `npm audit --omit=dev`: 0 vulnerabilities
 - `npm run lint`: passed
@@ -36,3 +36,5 @@ present.
 - Protected video `206` Range response and `Content-Range`: passed
 - Protected PDF response and sandbox HTML CSP: passed
 - Logout invalidation: passed
+- Blank-title and empty-file rejection: passed
+- PDF.js is lazy-loaded into a separate bundle; previous main-bundle warning resolved

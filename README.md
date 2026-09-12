@@ -77,6 +77,9 @@ npm run dev
 The API is available at `http://localhost:8000`, Swagger at
 `http://localhost:8000/docs`, and the frontend at `http://localhost:5173`.
 
+For a non-default API host, copy `frontend/.env.example` to
+`frontend/.env` and set `VITE_API_URL` before starting Vite.
+
 ## Environment variables
 
 Use [.env.example](.env.example) as the template. Important values are:
