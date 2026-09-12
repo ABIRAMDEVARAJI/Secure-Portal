@@ -22,3 +22,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Local private content storage
+backend/.private_storage/
