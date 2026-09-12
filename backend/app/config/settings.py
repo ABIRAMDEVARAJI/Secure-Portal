@@ -8,6 +8,7 @@ BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
 class Settings(BaseSettings):
     DATABASE_URL: str
+    DIRECT_URL: str | None = None
     FRONTEND_URL: str = "http://localhost:5173"
     BACKEND_URL: str = "http://localhost:8000"
     GOOGLE_CLIENT_ID: str = ""
